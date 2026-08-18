@@ -16,11 +16,12 @@ to a generative AI agent (OpenAI Codex).
 The process is described in:
 
 - [Delegate Coding to an Agent](docs/01-delegate-to-agent.md)
-- [First Agent Response and Plan](docs/02-response-plan.md)
-- [First Review and Update](docs/03-review-update.md)
-- [Second Agent Response and Plan](docs/04-response-plan.md)
-- [Second Review and Update](docs/05-review-update.md)
-- [Request Post-Implementation Check](docs/06-request-post-impl-check.md)
+- [1st Agent Response and Plan](docs/02-response-plan.md)
+- [1st Review and Update](docs/03-review-update.md)
+- [2nd Agent Response and Plan](docs/04-response-plan.md)
+- [2nd Review and Update](docs/05-review-update.md)
+- [3rd Request Post-Implementation Check](docs/06-request-post-impl-check.md)
+- [3rd Response: Check Results](docs/07-response.md)
   
 ## Goal
 
