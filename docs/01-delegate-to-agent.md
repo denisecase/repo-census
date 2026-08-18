@@ -10,9 +10,10 @@ Create a local repository with these initial files:
 repo-census/
 ├── .github/workflows/ci.yml
 ├── .vscode/ (with settings.json and extensions.json)
-├── docs/delegate-to-agent.md
+├── docs/01-delegate-to-agent.md
 ├── src/repo_census/__init__.py
 ├── tests/__init__.py
+├── .python-version
 ├── AGENTS.md
 ├── PROMPT.md
 ├── pyproject.toml

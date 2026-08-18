@@ -13,8 +13,11 @@ I started with a core set of initial files and
 delegated implementation of the code and project
 to a generative AI agent (OpenAI Codex).
 
-The process is described in
-[Delegate Coding to an Agent](docs/delegate-to-agent.md)
+The process is described in:
+
+- [Delegate Coding to an Agent](docs/01-delegate-to-agent.md)
+- [Agent Response and Plan](docs/02-response-plan.md)
+- [Review and Update](docs/03-review-update.md)
 
 ## Goal
 
@@ -29,7 +32,7 @@ Build a deterministic Python application that:
 
 ## Codex Workflow
 
-1. Read `docs/delegate-to-agent.md`.
+1. Read `docs/01-delegate-to-agent.md`.
 2. Review `AGENTS.md`.
 3. Review `PROMPT.md`.
 4. Open this destination repository in Codex.
