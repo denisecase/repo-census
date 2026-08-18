@@ -8,6 +8,12 @@ name = "repo-census"
 version = "0.1.0"
 description = "Collect and preserve GitHub repository activity and traffic data."
 requires-python = ">=3.14"
+dependencies = [
+    "httpx>=0.28.1",
+]
+
+[project.scripts]
+repo-census = "repo_census.cli:main"
 
 [dependency-groups]
 dev = [
@@ -18,7 +24,10 @@ dev = [
 
 [tool.uv]
 default-groups = "all"
-package = false
+
+[build-system]
+requires = ["uv_build>=0.8.15,<0.9.0"]
+build-backend = "uv_build"
 
 [tool.ruff]
 line-length = 100

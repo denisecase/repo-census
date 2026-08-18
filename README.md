@@ -32,6 +32,28 @@ Build a deterministic Python application that:
 - generates a useful report,
 - and can later be scheduled with GitHub Actions.
 
+Version 1 focuses on two questions: how actively `denisecase` maintains each repository,
+and whether GitHub traffic indicates continuing external use. It collects maintainer commits,
+views, visitors, clones, and cloners without cloning or modifying any monitored repository.
+
+## Quick Start
+
+The application requires Python 3.14, `uv`, and a GitHub token authenticated as
+`denisecase`. The token needs repository read access; GitHub traffic endpoints generally
+require push access.
+
+```powershell
+uv python install
+uv sync
+$env:GITHUB_TOKEN = "..."
+uv run repo-census collect
+uv run repo-census report --format markdown
+```
+
+The default database is `data/census.sqlite3`. Collection covers repositories visible to the
+authenticated user that are owned by `denisecase` or an organization in the explicit project
+allowlist. See [Usage](docs/usage.md) and [Architecture](docs/architecture.md).
+
 ## Codex Workflow
 
 1. Read `docs/01-delegate-to-agent.md`.
