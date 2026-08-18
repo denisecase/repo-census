@@ -20,7 +20,8 @@ The process is described in:
 - [First Review and Update](docs/03-review-update.md)
 - [Second Agent Response and Plan](docs/04-response-plan.md)
 - [Second Review and Update](docs/05-review-update.md)
-
+- [Request Post-Implementation Check](docs/06-request-post-impl-check.md)
+  
 ## Goal
 
 Build a deterministic Python application that:
