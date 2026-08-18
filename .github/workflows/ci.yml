@@ -1,0 +1,34 @@
+name: CI
+
+on:
+  push:
+  pull_request:
+
+permissions:
+  contents: read
+
+jobs:
+  validate:
+    runs-on: ubuntu-latest
+
+    steps:
+      - name: A1) Check out repository
+        uses: actions/checkout@v7
+
+      - name: A2) Install uv
+        uses: astral-sh/setup-uv@v10.0.0
+
+      - name: A3) Install Python
+        run: uv python install
+
+      - name: A4) Sync environment
+        run: uv sync
+
+      - name: B1) Run Ruff
+        run: uv run ruff check .
+
+      - name: B2) Run ty
+        run: uv run ty check
+
+      - name: C1) Run tests
+        run: uv run pytest

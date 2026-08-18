@@ -1,0 +1,38 @@
+# Repository Census
+
+> Collect and preserve repository activity and traffic data
+> for a fleet of GitHub repositories.
+
+## Agentic AI Application
+
+This repository is a **worked example** of delegating a bounded
+software-engineering task to **Codex**.
+
+Rather than pair-programming in chat,
+I started with a core set of initial files and
+delegated implementation of the code and project
+to a generative AI agent (OpenAI Codex).
+
+The process is described in
+[Delegate Coding to an Agent](docs/delegate-to-agent.md)
+
+## Goal
+
+Build a deterministic Python application that:
+
+- uses the GitHub API,
+- records repository activity and traffic statistics,
+- preserves historical observations,
+- does not clone the repositories being measured,
+- generates a useful report,
+- and can later be scheduled with GitHub Actions.
+
+## Codex Workflow
+
+1. Read `docs/delegate-to-agent.md`.
+2. Review `AGENTS.md`.
+3. Review `PROMPT.md`.
+4. Open this destination repository in Codex.
+5. Copy the task from `PROMPT.md` into Codex.
+6. Review the proposed plan before implementation.
+7. Review the resulting changes before accepting them.

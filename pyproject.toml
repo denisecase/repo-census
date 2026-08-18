@@ -1,0 +1,27 @@
+# ============================================================
+# pyproject.toml (Python project configuration)
+# ============================================================
+# Updated: 2026-08-18
+
+[project]
+name = "repo-census"
+version = "0.1.0"
+description = "Collect and preserve GitHub repository activity and traffic data."
+requires-python = ">=3.14"
+
+[dependency-groups]
+dev = [
+    "pytest",
+    "ruff",
+    "ty",
+]
+
+[tool.uv]
+default-groups = "all"
+package = false
+
+[tool.ruff]
+line-length = 100
+
+[tool.pytest.ini_options]
+testpaths = ["tests"]
