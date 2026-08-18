@@ -16,7 +16,7 @@ CREATE TABLE IF NOT EXISTS schema_metadata (
     key TEXT PRIMARY KEY,
     value TEXT NOT NULL
 );
-INSERT OR IGNORE INTO schema_metadata(key, value) VALUES ('schema_version', '1');
+INSERT OR IGNORE INTO schema_metadata(key, value) VALUES ('schema_version', '2');
 
 CREATE TABLE IF NOT EXISTS collection_runs (
     id INTEGER PRIMARY KEY,
@@ -52,6 +52,11 @@ CREATE TABLE IF NOT EXISTS repository_observations (
     run_id INTEGER NOT NULL REFERENCES collection_runs(id),
     repository_id INTEGER NOT NULL REFERENCES repositories(github_id),
     observed_at TEXT NOT NULL,
+    owner_login TEXT NOT NULL,
+    name TEXT NOT NULL,
+    full_name TEXT NOT NULL,
+    html_url TEXT NOT NULL,
+    api_url TEXT NOT NULL,
     visibility TEXT NOT NULL,
     is_private INTEGER NOT NULL,
     is_archived INTEGER NOT NULL,
@@ -110,9 +115,35 @@ class CensusStore:
         self.connection = sqlite3.connect(path)
         self.connection.row_factory = sqlite3.Row
         self.connection.executescript(SCHEMA)
+        self._migrate()
 
     def close(self) -> None:
         self.connection.close()
+
+    def _migrate(self) -> None:
+        """Bring pre-acceptance databases forward without discarding observations."""
+        columns = {
+            str(row["name"])
+            for row in self.connection.execute("PRAGMA table_info(repository_observations)")
+        }
+        identity_columns = ("owner_login", "name", "full_name", "html_url", "api_url")
+        for column in identity_columns:
+            if column not in columns:
+                self.connection.execute(
+                    f"ALTER TABLE repository_observations ADD COLUMN {column} TEXT"
+                )
+        for column in identity_columns:
+            self.connection.execute(
+                f"""UPDATE repository_observations
+                SET {column}=(SELECT r.{column} FROM repositories r
+                    WHERE r.github_id=repository_observations.repository_id)
+                WHERE {column} IS NULL"""
+            )
+        self.connection.execute(
+            "INSERT INTO schema_metadata(key,value) VALUES('schema_version','2') "
+            "ON CONFLICT(key) DO UPDATE SET value=excluded.value"
+        )
+        self.connection.commit()
 
     def __enter__(self) -> Self:
         return self
@@ -174,12 +205,14 @@ class CensusStore:
         )
         self.connection.execute(
             """INSERT INTO repository_observations(
-                run_id,repository_id,observed_at,visibility,is_private,is_archived,is_disabled,
-                is_fork,default_branch,created_at,updated_at,pushed_at,permission_role,
-                permissions_json,commit_status
-            ) VALUES (?,?,?,?,?,?,?,?,?,?,?,?,?,?, 'pending')""",
+                run_id,repository_id,observed_at,owner_login,name,full_name,html_url,api_url,
+                visibility,is_private,is_archived,is_disabled,is_fork,default_branch,created_at,
+                updated_at,pushed_at,permission_role,permissions_json,commit_status
+            ) VALUES (?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?, 'pending')""",
             (
-                run_id, repository.github_id, observed_at, repository.visibility,
+                run_id, repository.github_id, observed_at, repository.owner_login,
+                repository.name, repository.full_name, repository.html_url, repository.api_url,
+                repository.visibility,
                 repository.is_private, repository.is_archived, repository.is_disabled,
                 repository.is_fork, repository.default_branch, repository.created_at,
                 repository.updated_at, repository.pushed_at, repository.permission_role,

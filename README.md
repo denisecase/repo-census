@@ -22,6 +22,7 @@ The process is described in:
 - [2nd Review and Update](docs/05-review-update.md)
 - [3rd Request Post-Implementation Check](docs/06-request-post-impl-check.md)
 - [3rd Response: Check Results](docs/07-response.md)
+- [4th Request: Updates](docs/08-request.md)
   
 ## Goal
 
@@ -37,6 +38,8 @@ Build a deterministic Python application that:
 Version 1 focuses on two questions: how actively `denisecase` maintains each repository,
 and whether GitHub traffic indicates continuing external use. It collects maintainer commits,
 views, visitors, clones, and cloners without cloning or modifying any monitored repository.
+Traffic is evidence that a repository continues to be used, but GitHub does not identify whether
+that traffic came from external users or from the maintainer.
 
 ## Quick Start
 

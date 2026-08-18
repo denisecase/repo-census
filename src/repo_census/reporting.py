@@ -22,7 +22,7 @@ def build_report(store: CensusStore) -> dict[str, Any]:
     )]
     repositories: list[dict[str, Any]] = []
     rows = store.connection.execute(
-        """SELECT r.*, o.* FROM repositories r
+        """SELECT r.github_id, o.* FROM repositories r
         JOIN repository_observations o ON o.repository_id=r.github_id
         WHERE o.run_id=?
         ORDER BY r.owner_login COLLATE NOCASE, r.name COLLATE NOCASE""",
@@ -32,7 +32,7 @@ def build_report(store: CensusStore) -> dict[str, Any]:
         repository_id = int(row["github_id"])
         commit_summary = _commit_summary(store.connection, repository_id, reference)
         traffic = {
-            kind: _latest_traffic(store.connection, repository_id, kind)
+            kind: _traffic_for_run(store.connection, repository_id, kind, int(run["id"]))
             for kind in ("views", "clones")
         }
         repositories.append(
@@ -98,13 +98,13 @@ def _commit_summary(
     return {"last_commit_at": last, "days_since_last_commit": days_since, **counts}
 
 
-def _latest_traffic(
-    connection: sqlite3.Connection, repository_id: int, kind: str
+def _traffic_for_run(
+    connection: sqlite3.Connection, repository_id: int, kind: str, run_id: int
 ) -> dict[str, Any]:
     row = connection.execute(
-        "SELECT * FROM traffic_collection_results WHERE repository_id=? AND kind=? "
-        "ORDER BY run_id DESC LIMIT 1",
-        (repository_id, kind),
+        "SELECT * FROM traffic_collection_results "
+        "WHERE repository_id=? AND kind=? AND run_id=?",
+        (repository_id, kind, run_id),
     ).fetchone()
     if row is None:
         return {"status": "not_collected"}

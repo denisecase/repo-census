@@ -103,20 +103,22 @@ class GitHubClient:
             data = response.json()
         except (httpx.HTTPError, ValueError) as exc:
             return TrafficResult(status="error", error=str(exc))
-        daily_key = kind
-        return TrafficResult(
-            status="available",
-            aggregate_count=int(data["count"]),
-            aggregate_uniques=int(data["uniques"]),
-            days=tuple(
-                TrafficDay(
-                    timestamp=str(day["timestamp"]),
-                    count=int(day["count"]),
-                    uniques=int(day["uniques"]),
-                )
-                for day in data.get(daily_key, [])
-            ),
-        )
+        try:
+            return TrafficResult(
+                status="available",
+                aggregate_count=int(data["count"]),
+                aggregate_uniques=int(data["uniques"]),
+                days=tuple(
+                    TrafficDay(
+                        timestamp=str(day["timestamp"]),
+                        count=int(day["count"]),
+                        uniques=int(day["uniques"]),
+                    )
+                    for day in data.get(kind, [])
+                ),
+            )
+        except (KeyError, TypeError, ValueError) as exc:
+            return TrafficResult(status="error", error=f"invalid traffic response: {exc}")
 
     def _paginate(self, path: str, params: dict[str, str]) -> list[dict[str, Any]]:
         output: list[dict[str, Any]] = []
