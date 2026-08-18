@@ -8,7 +8,7 @@ from datetime import datetime
 from pathlib import Path
 from typing import Self
 
-from .models import Commit, Repository, TrafficResult
+from .models import Commit, PullRequestResult, Repository, TrafficResult
 
 SCHEMA = """
 PRAGMA foreign_keys = ON;
@@ -16,7 +16,7 @@ CREATE TABLE IF NOT EXISTS schema_metadata (
     key TEXT PRIMARY KEY,
     value TEXT NOT NULL
 );
-INSERT OR IGNORE INTO schema_metadata(key, value) VALUES ('schema_version', '3');
+INSERT OR IGNORE INTO schema_metadata(key, value) VALUES ('schema_version', '4');
 
 CREATE TABLE IF NOT EXISTS collection_runs (
     id INTEGER PRIMARY KEY,
@@ -102,10 +102,40 @@ CREATE TABLE IF NOT EXISTS traffic_observations (
     uniques INTEGER NOT NULL,
     UNIQUE(traffic_result_id, traffic_at)
 );
+CREATE TABLE IF NOT EXISTS pull_request_collection_results (
+    id INTEGER PRIMARY KEY,
+    run_id INTEGER NOT NULL REFERENCES collection_runs(id),
+    repository_id INTEGER NOT NULL REFERENCES repositories(github_id),
+    observed_at TEXT NOT NULL,
+    status TEXT NOT NULL CHECK(status IN ('available', 'forbidden', 'unavailable', 'error')),
+    open_count INTEGER,
+    error TEXT,
+    UNIQUE(run_id, repository_id)
+);
+CREATE TABLE IF NOT EXISTS open_pull_request_observations (
+    id INTEGER PRIMARY KEY,
+    pull_request_result_id INTEGER NOT NULL REFERENCES pull_request_collection_results(id),
+    repository_id INTEGER NOT NULL REFERENCES repositories(github_id),
+    owner_login TEXT NOT NULL,
+    repository_name TEXT NOT NULL,
+    number INTEGER NOT NULL,
+    title TEXT NOT NULL,
+    author_login TEXT,
+    html_url TEXT NOT NULL,
+    created_at TEXT NOT NULL,
+    updated_at TEXT NOT NULL,
+    is_draft INTEGER NOT NULL,
+    is_dependabot INTEGER NOT NULL,
+    UNIQUE(pull_request_result_id, number)
+);
 CREATE INDEX IF NOT EXISTS ix_repository_owner ON repositories(owner_login, name);
 CREATE INDEX IF NOT EXISTS ix_commits_time ON maintainer_commits(repository_id, committed_at);
 CREATE INDEX IF NOT EXISTS ix_traffic_lookup
     ON traffic_collection_results(repository_id, kind, observed_at);
+CREATE INDEX IF NOT EXISTS ix_pull_request_result_lookup
+    ON pull_request_collection_results(run_id, repository_id);
+CREATE INDEX IF NOT EXISTS ix_open_pull_request_lookup
+    ON open_pull_request_observations(pull_request_result_id, number);
 """
 
 
@@ -147,7 +177,7 @@ class CensusStore:
         if "repo_pattern" not in run_columns:
             self.connection.execute("ALTER TABLE collection_runs ADD COLUMN repo_pattern TEXT")
         self.connection.execute(
-            "INSERT INTO schema_metadata(key,value) VALUES('schema_version','3') "
+            "INSERT INTO schema_metadata(key,value) VALUES('schema_version','4') "
             "ON CONFLICT(key) DO UPDATE SET value=excluded.value"
         )
         self.connection.commit()
@@ -278,6 +308,42 @@ class CensusStore:
             "INSERT INTO traffic_observations(traffic_result_id,traffic_at,count,uniques) "
             "VALUES (?,?,?,?)",
             ((result_id, day.timestamp, day.count, day.uniques) for day in result.days),
+        )
+
+    def record_pull_requests(
+        self,
+        run_id: int,
+        repository: Repository,
+        observed_at: str,
+        result: PullRequestResult,
+    ) -> None:
+        observations = result.pull_requests if result.status == "available" else ()
+        open_count = len(observations) if result.status == "available" else None
+        cursor = self.connection.execute(
+            """INSERT INTO pull_request_collection_results(
+                run_id,repository_id,observed_at,status,open_count,error
+            ) VALUES (?,?,?,?,?,?)""",
+            (
+                run_id, repository.github_id, observed_at, result.status,
+                open_count, result.error,
+            ),
+        )
+        if cursor.lastrowid is None:
+            raise RuntimeError("SQLite did not return a pull request result ID")
+        result_id = cursor.lastrowid
+        self.connection.executemany(
+            """INSERT INTO open_pull_request_observations(
+                pull_request_result_id,repository_id,owner_login,repository_name,number,title,
+                author_login,html_url,created_at,updated_at,is_draft,is_dependabot
+            ) VALUES (?,?,?,?,?,?,?,?,?,?,?,?)""",
+            (
+                (
+                    result_id, repository.github_id, repository.owner_login, repository.name,
+                    item.number, item.title, item.author_login, item.html_url, item.created_at,
+                    item.updated_at, item.is_draft, item.is_dependabot,
+                )
+                for item in observations
+            ),
         )
 
     def last_successful_started_at(self) -> datetime | None:

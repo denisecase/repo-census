@@ -35,6 +35,9 @@ def build_report(store: CensusStore) -> dict[str, Any]:
             kind: _traffic_for_run(store.connection, repository_id, kind, int(run["id"]))
             for kind in ("views", "clones")
         }
+        pull_requests = _pull_requests_for_run(
+            store.connection, repository_id, int(run["id"]), reference
+        )
         repositories.append(
             {
                 "owner": row["owner_login"],
@@ -59,8 +62,25 @@ def build_report(store: CensusStore) -> dict[str, Any]:
                 },
                 "maintainer_activity": commit_summary,
                 "traffic": traffic,
+                "open_pull_requests": pull_requests,
             }
         )
+    open_pull_request_summary = [
+        {
+            "owner": repository["owner"],
+            "repository": repository["name"],
+            "full_name": repository["full_name"],
+            "url": repository["url"],
+            "total_open": repository["open_pull_requests"]["total_open"],
+            "dependabot_open": repository["open_pull_requests"]["dependabot_open"],
+            "oldest_open_age_days": repository["open_pull_requests"][
+                "oldest_open_age_days"
+            ],
+        }
+        for repository in repositories
+        if (repository["open_pull_requests"].get("total_open") or 0) > 0
+    ]
+    open_pull_request_summary.sort(key=_pull_request_summary_sort_key)
     return {
         "generated_from_run": {
             "id": run["id"],
@@ -73,6 +93,7 @@ def build_report(store: CensusStore) -> dict[str, Any]:
             "error": run["error"],
         },
         "owner_collection_results": owner_results,
+        "open_pull_request_summary": open_pull_request_summary,
         "repositories": repositories,
     }
 
@@ -124,6 +145,73 @@ def _traffic_for_run(
     }
 
 
+def _pull_requests_for_run(
+    connection: sqlite3.Connection,
+    repository_id: int,
+    run_id: int,
+    reference: datetime,
+) -> dict[str, Any]:
+    row = connection.execute(
+        "SELECT * FROM pull_request_collection_results "
+        "WHERE repository_id=? AND run_id=?",
+        (repository_id, run_id),
+    ).fetchone()
+    if row is None:
+        return {
+            "status": "not_collected",
+            "observed_at": None,
+            "total_open": None,
+            "dependabot_open": None,
+            "oldest_open_age_days": None,
+            "error": None,
+            "pull_requests": [],
+        }
+    pull_requests = [
+        {
+            "number": item["number"],
+            "title": item["title"],
+            "author": item["author_login"],
+            "url": item["html_url"],
+            "created_at": item["created_at"],
+            "updated_at": item["updated_at"],
+            "draft": bool(item["is_draft"]),
+            "dependabot": bool(item["is_dependabot"]),
+        }
+        for item in connection.execute(
+            "SELECT * FROM open_pull_request_observations "
+            "WHERE pull_request_result_id=? ORDER BY number",
+            (row["id"],),
+        )
+    ]
+    oldest_age = None
+    if pull_requests:
+        oldest_created = min(
+            datetime.fromisoformat(str(item["created_at"])) for item in pull_requests
+        )
+        oldest_age = max(0, (reference - oldest_created).days)
+    return {
+        "status": row["status"],
+        "observed_at": row["observed_at"],
+        "total_open": row["open_count"],
+        "dependabot_open": (
+            sum(1 for item in pull_requests if item["dependabot"])
+            if row["status"] == "available"
+            else None
+        ),
+        "oldest_open_age_days": oldest_age,
+        "error": row["error"],
+        "pull_requests": pull_requests,
+    }
+
+
+def _pull_request_summary_sort_key(item: dict[str, Any]) -> tuple[int, int, str]:
+    return (
+        -int(item["dependabot_open"] > 0),
+        -int(item["oldest_open_age_days"]),
+        str(item["full_name"]).casefold(),
+    )
+
+
 def render_json(report: dict[str, Any]) -> str:
     return json.dumps(report, indent=2, sort_keys=True) + "\n"
 
@@ -142,6 +230,22 @@ def render_markdown(report: dict[str, Any]) -> str:
     ]
     if run["repo_pattern"] is not None:
         lines[5:5] = [f"Repository pattern: `{run['repo_pattern']}`  "]
+    summary = report["open_pull_request_summary"]
+    lines.extend(["## Open Pull Request Summary", ""])
+    if summary:
+        lines.extend([
+            "| Repository | Open PRs | Dependabot | Oldest open PR |",
+            "| --- | ---: | ---: | ---: |",
+        ])
+        for item in summary:
+            lines.append(
+                f"| [{item['full_name']}]({item['url']}/pulls) | "
+                f"{item['total_open']} | {item['dependabot_open']} | "
+                f"{item['oldest_open_age_days']} days |"
+            )
+        lines.append("")
+    else:
+        lines.extend(["No open pull requests were observed in this run.", ""])
     owner_results = report["owner_collection_results"]
     failures = [item for item in owner_results if item["status"] != "successful"]
     if failures:
@@ -168,9 +272,25 @@ def render_markdown(report: dict[str, Any]) -> str:
                 _activity_line(repository["maintainer_activity"]),
                 _traffic_line("Views", repository["traffic"]["views"]),
                 _traffic_line("Clones", repository["traffic"]["clones"]),
-                "",
+                _pull_request_line(repository["open_pull_requests"]),
             ]
         )
+        pull_requests = repository["open_pull_requests"]["pull_requests"]
+        if pull_requests:
+            lines.extend(["", "#### Open pull requests", ""])
+            for item in pull_requests:
+                flags = []
+                if item["draft"]:
+                    flags.append("draft")
+                if item["dependabot"]:
+                    flags.append("Dependabot")
+                suffix = f"; {', '.join(flags)}" if flags else ""
+                author = item["author"] or "unknown author"
+                lines.append(
+                    f"- [#{item['number']}: {item['title']}]({item['url']}) — "
+                    f"{author}; created {item['created_at']}{suffix}"
+                )
+        lines.append("")
     return "\n".join(lines).rstrip() + "\n"
 
 
@@ -189,4 +309,17 @@ def _traffic_line(label: str, traffic: dict[str, Any]) -> str:
     return (
         f"- {label}: {traffic['aggregate_count']} total, "
         f"{traffic['aggregate_uniques']} unique (GitHub aggregate; observed {traffic['observed_at']})"
+    )
+
+
+def _pull_request_line(result: dict[str, Any]) -> str:
+    if result["status"] != "available":
+        detail = f" — {result['error']}" if result.get("error") else ""
+        return f"- Open pull requests: {result['status']}{detail}"
+    if result["total_open"] == 0:
+        return "- Open pull requests: 0"
+    return (
+        f"- Open pull requests: {result['total_open']} total; "
+        f"{result['dependabot_open']} Dependabot; oldest: "
+        f"{result['oldest_open_age_days']} days"
     )

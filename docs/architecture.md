@@ -14,8 +14,9 @@ named organizations in `constants.py`. The collector does not discover organizat
 It calls the authenticated user's owned-repository endpoint and each allowlisted organization's
 repository endpoint, retaining every repository visible to the token.
 
-Only HTTP `GET` operations are implemented. The application has no clone, update, issue, pull
-request, release, or repository-maintenance capability.
+Only HTTP `GET` operations are implemented. Version 2 reads the GitHub pull-request endpoint
+with `state=open`. The application has no clone, update, issue, release, pull-request mutation,
+or repository-maintenance capability.
 
 ## Historical Model
 
@@ -41,6 +42,25 @@ metadata, and traffic must all belong to that run. Missing traffic is reported a
 from the selected run are absent from its inventory, while their historical observations remain
 in SQLite.
 
+## Version 2 Open Pull Requests
+
+Each repository observation has a separate pull-request collection result for the same run.
+An `available` result stores the exact set of open pull requests GitHub returned, including an
+explicit zero count. `forbidden`, `unavailable`, and `error` results retain their diagnostic but
+do not create a false zero. Individual open pull-request observations belong to that result and
+snapshot the repository owner/name, PR number, title, author, URL, timestamps, draft state, and
+Dependabot indicator.
+
+Open state is run-specific. Reports join pull-request results through the selected run and never
+carry observations forward. Consequently, a PR absent from a later successful response is no
+longer reported as open, while its earlier observation remains intact. Databases created by
+Version 1 are migrated non-destructively; their earlier runs report pull requests as
+`not_collected`.
+
+Dependabot classification uses case-insensitive exact matching of GitHub's `user.login` against
+`dependabot[bot]` and the legacy `dependabot-preview[bot]`. Titles, branches, and labels are not
+examined. The actual author login is preserved independently of the derived indicator.
+
 ## Collection Statuses
 
 - `successful` means all configured owner and commit requests completed without execution errors.
@@ -54,6 +74,10 @@ in SQLite.
   repository permission.
 - Traffic `unavailable` means GitHub returned HTTP 404 or 422 for that traffic endpoint.
 - Traffic `error` means transport, HTTP, or response processing failed for another reason.
+- Pull-request `available` means GitHub returned a valid complete open-PR response; its stored
+  count distinguishes zero from one or more open PRs.
+- Pull-request `forbidden`, `unavailable`, and `error` retain the same HTTP/processing meanings
+  and make the overall collection run partial without stopping later repositories.
 
 ## Reporting and Future Classification
 
@@ -63,5 +87,7 @@ Daily unique values are retained for inspection but never summed into a multi-da
 Views and clones demonstrate continuing repository traffic, but GitHub does not distinguish
 external users from the maintainer; they are evidence of external use, not proof of it.
 
-The JSON report exposes factual features for a later deterministic classifier. Version 1 does
-not assign labels or thresholds.
+Version 2 adds an open-pull-request fleet summary and repository-level details to both report
+formats. The summary contains only repositories with observed open PRs and sorts Dependabot
+repositories first, then oldest PR age descending, then full repository name. Reports expose
+facts without assigning scores, recommendations, labels, or thresholds.

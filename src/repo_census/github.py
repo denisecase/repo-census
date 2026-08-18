@@ -7,7 +7,14 @@ from typing import Any, Self
 import httpx
 
 from .constants import AUTHENTICATED_OWNER, ORGANIZATION_ALLOWLIST
-from .models import Commit, Repository, TrafficDay, TrafficResult
+from .models import (
+    Commit,
+    PullRequest,
+    PullRequestResult,
+    Repository,
+    TrafficDay,
+    TrafficResult,
+)
 
 
 class GitHubError(RuntimeError):
@@ -119,6 +126,27 @@ class GitHubClient:
             )
         except (KeyError, TypeError, ValueError) as exc:
             return TrafficResult(status="error", error=f"invalid traffic response: {exc}")
+
+    def open_pull_requests(self, repository: Repository) -> PullRequestResult:
+        """Return every open pull request without modifying the repository."""
+        try:
+            values = self._paginate(
+                f"/repos/{repository.full_name}/pulls",
+                {"state": "open", "sort": "created", "direction": "asc"},
+            )
+            return PullRequestResult(
+                status="available",
+                pull_requests=tuple(PullRequest.from_api(value) for value in values),
+            )
+        except GitHubError as exc:
+            message = str(exc)
+            if "returned 403" in message:
+                return PullRequestResult(status="forbidden", error=message)
+            if "returned 404" in message or "returned 422" in message:
+                return PullRequestResult(status="unavailable", error=message)
+            return PullRequestResult(status="error", error=message)
+        except (httpx.HTTPError, KeyError, TypeError, ValueError) as exc:
+            return PullRequestResult(status="error", error=str(exc))
 
     def _paginate(self, path: str, params: dict[str, str]) -> list[dict[str, Any]]:
         output: list[dict[str, Any]] = []

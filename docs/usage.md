@@ -6,9 +6,10 @@ Set `GITHUB_TOKEN` to a token authenticated as `denisecase`. The collector verif
 authenticated login before creating a collection run. The token is sent only to GitHub and is
 not stored in SQLite or reports.
 
-Repository metadata and commits require read access. GitHub's traffic endpoints generally
-require push access. A repository remains in the census when traffic is forbidden or otherwise
-unavailable; views and clones each receive a separate availability result.
+Repository metadata, commits, and open pull requests require read access. GitHub's traffic
+endpoints generally require push access. A repository remains in the census when traffic or
+pull-request data is forbidden or otherwise unavailable; each request receives a separate
+availability result.
 
 ## Collect
 
@@ -32,6 +33,15 @@ historical database show that the inventory was intentionally filtered.
 The initial commit query looks back 365 days by default. Later successful collections begin at
 the previous successful collection with a one-day overlap, while still respecting the requested
 maximum lookback. Commits are deduplicated by repository and SHA.
+
+For every included repository, Version 2 also reads all pages of GitHub's pull-request endpoint
+with `state=open`. This is strictly read-only: the application cannot approve, merge, close,
+comment on, review, or otherwise modify a pull request. A failure for one repository is recorded
+and collection continues with the remaining repositories.
+
+Dependabot is identified only by case-insensitive exact GitHub author login
+(`dependabot[bot]` or legacy `dependabot-preview[bot]`). The title is never used for
+classification, and the actual author login is retained.
 
 For Version 1, "maintainer activity" has a precise API-level meaning:
 
@@ -60,9 +70,14 @@ uv run repo-census report --format json --output reports/census.json
 ```
 
 Markdown and JSON are generated deterministically from SQLite. Reports group repositories by
-owner and show maintainer commit counts over 30, 90, and 365 days, along with GitHub traffic.
-The latest completed collection is the report's implicit selected run. Metadata and traffic are
-read only from that run. There is no earlier-run traffic fallback in Version 1.
+owner and show maintainer commit counts over 30, 90, and 365 days, GitHub traffic, and detailed
+open pull requests. A fleet-level open-PR summary appears near the top and includes only
+repositories with observed open PRs. It orders repositories with Dependabot PRs first, then by
+oldest open PR age descending, then by full repository name.
+
+The latest completed collection is the report's implicit selected run. Metadata, traffic, and
+pull-request observations are read only from that run. An earlier open PR is not carried into a
+later report when it is absent from that run's successful response.
 
 GitHub returns both an aggregate unique count and unique counts for individual days. These are
 not additive: one person may appear on multiple days. The census stores both forms and reports
@@ -80,6 +95,10 @@ users or the maintainer. Treat these values as evidence of continuing external u
 - `unavailable`: GitHub returned HTTP 404 or 422 for one traffic endpoint.
 - `error`: another transport, HTTP, or response-processing failure affected a traffic endpoint.
 
+For pull requests, `available` plus a stored count distinguishes a successful zero result from
+one or more open PRs. `forbidden`, `unavailable`, and `error` mean the PR inventory could not be
+collected and make the run partial; they never appear as zero.
+
 Authentication and identity verification happen before run creation, so authentication failures
 do not create collection-run records.
 
@@ -89,5 +108,6 @@ do not create collection-run records.
 - Private repositories and traffic are visible only when allowed by the token.
 - The commits API associates commits with the requested GitHub author identity. Unlinked commit
   email identities may not be attributed to `denisecase`.
-- Version 1 does not classify repositories or collect issues, pull requests, releases, popular
-  paths, or popular referrers.
+- Version 2 collects only open pull requests. It does not collect issues, closed pull requests,
+  reviews, comments, workflows, security alerts, releases, popular paths, or popular referrers,
+  and it does not classify repository maintenance health.

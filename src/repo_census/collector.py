@@ -9,7 +9,7 @@ import httpx
 
 from .constants import DEFAULT_OWNERS
 from .github import GitHubError
-from .models import Commit, Repository, TrafficResult, utc_text
+from .models import Commit, PullRequestResult, Repository, TrafficResult, utc_text
 from .persistence import CensusStore
 
 
@@ -18,6 +18,7 @@ class GitHubReader(Protocol):
     def repositories_for_owner(self, owner: str) -> list[Repository]: ...
     def commits(self, repository: Repository, *, since: datetime) -> Iterator[Commit]: ...
     def traffic(self, repository: Repository, kind: str) -> TrafficResult: ...
+    def open_pull_requests(self, repository: Repository) -> PullRequestResult: ...
 
 
 class Collector:
@@ -81,6 +82,16 @@ class Collector:
                             self.store.set_commit_result(
                                 run_id, repository.github_id, "error", str(exc)
                             )
+                    try:
+                        pull_requests = self.github.open_pull_requests(repository)
+                    except (GitHubError, httpx.HTTPError, KeyError, TypeError, ValueError) as exc:
+                        pull_requests = PullRequestResult("error", error=str(exc))
+                    if pull_requests.status != "available":
+                        partial = True
+                    with self.store.transaction():
+                        self.store.record_pull_requests(
+                            run_id, repository, observed_at, pull_requests
+                        )
                     for kind in ("views", "clones"):
                         result = self.github.traffic(repository, kind)
                         if result.status == "error":

@@ -100,6 +100,51 @@ class TrafficResult:
     error: str | None = None
 
 
+DEPENDABOT_LOGINS = frozenset({"dependabot[bot]", "dependabot-preview[bot]"})
+
+
+@dataclass(frozen=True)
+class PullRequest:
+    """An open pull request returned by GitHub."""
+
+    number: int
+    title: str
+    author_login: str | None
+    html_url: str
+    created_at: str
+    updated_at: str
+    is_draft: bool
+    is_dependabot: bool
+
+    @classmethod
+    def from_api(cls, value: dict[str, Any]) -> PullRequest:
+        author = value.get("user")
+        author_login = author.get("login") if isinstance(author, dict) else None
+        return cls(
+            number=int(value["number"]),
+            title=str(value["title"]),
+            author_login=str(author_login) if author_login is not None else None,
+            html_url=str(value["html_url"]),
+            created_at=str(value["created_at"]),
+            updated_at=str(value["updated_at"]),
+            is_draft=bool(value.get("draft", False)),
+            is_dependabot=(
+                author_login.casefold() in DEPENDABOT_LOGINS
+                if isinstance(author_login, str)
+                else False
+            ),
+        )
+
+
+@dataclass(frozen=True)
+class PullRequestResult:
+    """Availability and observations from an open-pull-request request."""
+
+    status: str
+    pull_requests: tuple[PullRequest, ...] = ()
+    error: str | None = None
+
+
 def utc_text(value: datetime) -> str:
     """Return a stable UTC ISO timestamp."""
     return value.isoformat(timespec="seconds").replace("+00:00", "Z")

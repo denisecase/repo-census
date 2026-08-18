@@ -137,3 +137,84 @@ def test_malformed_traffic_response_is_recorded(repository: Repository) -> None:
     assert result.status == "error"
     assert result.error is not None
     assert result.error.startswith("invalid traffic response:")
+
+
+def pull_request_payload(
+    number: int = 1,
+    *,
+    login: str | None = "octocat",
+    draft: bool = False,
+) -> dict[str, Any]:
+    return {
+        "number": number,
+        "title": f"Pull request {number}",
+        "user": {"login": login} if login is not None else None,
+        "html_url": f"https://github.com/denisecase/example/pull/{number}",
+        "created_at": "2026-07-01T00:00:00Z",
+        "updated_at": "2026-08-01T00:00:00Z",
+        "draft": draft,
+    }
+
+
+def test_open_pull_requests_use_open_state_and_paginate(repository: Repository) -> None:
+    requested_pages: list[str] = []
+
+    def handler(request: httpx.Request) -> httpx.Response:
+        assert request.url.path == "/repos/denisecase/example/pulls"
+        assert request.url.params["state"] == "open"
+        page = request.url.params["page"]
+        requested_pages.append(page)
+        values = [pull_request_payload(index) for index in range(1, 101)]
+        if page == "2":
+            values = [pull_request_payload(101, draft=True)]
+        return httpx.Response(200, json=values)
+
+    result = client(handler).open_pull_requests(repository)
+    assert result.status == "available"
+    assert len(result.pull_requests) == 101
+    assert result.pull_requests[-1].is_draft is True
+    assert requested_pages == ["1", "2"]
+
+
+@pytest.mark.parametrize(
+    ("login", "expected"),
+    [
+        ("dependabot[bot]", True),
+        ("Dependabot-Preview[bot]", True),
+        ("renovate[bot]", False),
+        ("octocat", False),
+        (None, False),
+    ],
+)
+def test_dependabot_is_derived_only_from_author_identity(
+    repository: Repository, login: str | None, expected: bool
+) -> None:
+    result = client(
+        lambda request: httpx.Response(200, json=[pull_request_payload(login=login)])
+    ).open_pull_requests(repository)
+    pull_request = result.pull_requests[0]
+    assert pull_request.author_login == login
+    assert pull_request.is_dependabot is expected
+
+
+@pytest.mark.parametrize(
+    ("status_code", "status"),
+    [(403, "forbidden"), (404, "unavailable"), (422, "unavailable"), (500, "error")],
+)
+def test_pull_request_collection_statuses(
+    repository: Repository, status_code: int, status: str
+) -> None:
+    result = client(
+        lambda request: httpx.Response(status_code, json={"message": "not accessible"})
+    ).open_pull_requests(repository)
+    assert result.status == status
+    assert result.error is not None
+
+
+def test_pull_request_transport_failure_is_recorded(repository: Repository) -> None:
+    def fail(request: httpx.Request) -> httpx.Response:
+        raise httpx.ConnectError("offline", request=request)
+
+    result = client(fail).open_pull_requests(repository)
+    assert result.status == "error"
+    assert result.error == "offline"

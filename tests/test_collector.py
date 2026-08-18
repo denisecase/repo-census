@@ -7,7 +7,7 @@ import pytest
 from repo_census.collector import Collector
 from repo_census.constants import DEFAULT_OWNERS
 from repo_census.github import GitHubError
-from repo_census.models import Commit, Repository, TrafficResult
+from repo_census.models import Commit, PullRequestResult, Repository, TrafficResult
 from repo_census.persistence import CensusStore
 
 
@@ -30,6 +30,9 @@ class FakeGitHub:
 
     def traffic(self, repository: Repository, kind: str) -> TrafficResult:
         return TrafficResult("forbidden", error="no traffic permission")
+
+    def open_pull_requests(self, repository: Repository) -> PullRequestResult:
+        return PullRequestResult("available")
 
 
 class OwnerTrackingGitHub(FakeGitHub):
@@ -167,6 +170,42 @@ def test_traffic_error_causes_partial_run(tmp_path: Path, repository: Repository
         assert store.connection.execute(
             "SELECT status FROM collection_runs WHERE id=?", (run,)
         ).fetchone()[0] == "partial"
+
+
+def test_pull_request_failure_is_partial_and_does_not_stop_later_repository(
+    tmp_path: Path, repository_payload: dict[str, object]
+) -> None:
+    repositories = [
+        Repository.from_api({
+            **repository_payload, "id": 501, "name": "broken",
+            "full_name": "denisecase/broken",
+        }),
+        Repository.from_api({
+            **repository_payload, "id": 502, "name": "good",
+            "full_name": "denisecase/good",
+        }),
+    ]
+
+    class PullRequestFailureGitHub(RepositoryFailureGitHub):
+        def open_pull_requests(self, repository: Repository) -> PullRequestResult:
+            if repository.name == "broken":
+                return PullRequestResult("forbidden", error="not accessible")
+            return PullRequestResult("available")
+
+    now = datetime(2026, 8, 18, 12, tzinfo=UTC)
+    with CensusStore(tmp_path / "census.db") as store:
+        run = Collector(
+            PullRequestFailureGitHub(repositories), store, clock=lambda: now
+        ).collect(owners=("denisecase",))
+        results = list(store.connection.execute(
+            "SELECT status,open_count FROM pull_request_collection_results "
+            "WHERE run_id=? ORDER BY repository_id", (run,)
+        ))
+        run_status = store.connection.execute(
+            "SELECT status FROM collection_runs WHERE id=?", (run,)
+        ).fetchone()[0]
+    assert [tuple(item) for item in results] == [("forbidden", None), ("available", 0)]
+    assert run_status == "partial"
 
 
 @pytest.mark.parametrize(

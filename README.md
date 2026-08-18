@@ -10,7 +10,7 @@
 [![Links](https://github.com/denisecase/repo-census/actions/workflows/links.yml/badge.svg?branch=main)](https://github.com/denisecase/repo-census/actions/workflows/links.yml)
 [![Dependabot](https://img.shields.io/badge/Dependabot-enabled-brightgreen.svg)](https://github.com/denisecase/repo-census/security)
 
-> Collect and preserve repository activity and traffic data
+> Collect and preserve repository activity, traffic, and open pull-request data
 > for a fleet of GitHub repositories.
 
 ## Agentic AI Application
@@ -35,6 +35,9 @@ The process is described in:
 - [4th Request: Updates](docs/08-request.md)
 - [4th Response: Version 1](docs/09-response-complete.md)
 - [5th Request: Parameter match](docs/10-request-param-match.md)
+- [6th Request: V2 active PRs](docs/11-request-v2.md)
+- [6th Response: V2 draft](docs/12-response.md)
+- [7th Request: V2 update](docs/13-request.md)
 
 ## Goal
 
@@ -56,6 +59,11 @@ without cloning or modifying any monitored repository.
 Traffic is evidence that a repository continues to be used,
 but GitHub does not identify whether
 that traffic came from external users or from the maintainer.
+
+Version 2 identifies repositories with open maintenance pull requests across the fleet. It calls
+out Dependabot pull requests separately, preserves run-specific historical observations, and
+reports factual PR details without scoring or taking maintenance action. Collection is strictly
+read-only and never modifies a monitored repository or pull request.
 
 ## Quick Start
 
