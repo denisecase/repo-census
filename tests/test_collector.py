@@ -1,5 +1,8 @@
+from dataclasses import replace
 from datetime import UTC, datetime
 from pathlib import Path
+
+import pytest
 
 from repo_census.collector import Collector
 from repo_census.constants import DEFAULT_OWNERS
@@ -164,3 +167,48 @@ def test_traffic_error_causes_partial_run(tmp_path: Path, repository: Repository
         assert store.connection.execute(
             "SELECT status FROM collection_runs WHERE id=?", (run,)
         ).fetchone()[0] == "partial"
+
+
+@pytest.mark.parametrize(
+    ("repo_pattern", "expected"),
+    [
+        ("datafun-*", ["datafun-one"]),
+        ("missing-*", []),
+        (None, ["datafun-one", "other"]),
+    ],
+    ids=("matching", "nonmatching", "omitted"),
+)
+def test_repository_name_pattern_filter(
+    tmp_path: Path,
+    repository: Repository,
+    repo_pattern: str | None,
+    expected: list[str],
+) -> None:
+    repositories = [
+        replace(
+            repository,
+            github_id=401,
+            name="datafun-one",
+            full_name="denisecase/datafun-one",
+        ),
+        replace(
+            repository,
+            github_id=402,
+            name="other",
+            full_name="denisecase/other",
+        ),
+    ]
+    github = RepositoryFailureGitHub(repositories)
+    now = datetime(2026, 8, 18, 12, tzinfo=UTC)
+    with CensusStore(tmp_path / "census.db") as store:
+        run = Collector(github, store, clock=lambda: now).collect(
+            owners=("denisecase",), repo_pattern=repo_pattern
+        )
+        names = [row["name"] for row in store.connection.execute(
+            "SELECT name FROM repository_observations WHERE run_id=? ORDER BY name", (run,)
+        )]
+        stored_pattern = store.connection.execute(
+            "SELECT repo_pattern FROM collection_runs WHERE id=?", (run,)
+        ).fetchone()[0]
+    assert names == expected
+    assert stored_pattern == repo_pattern

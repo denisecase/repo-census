@@ -3,7 +3,7 @@ from pathlib import Path
 
 import pytest
 
-from repo_census.cli import main
+from repo_census.cli import main, parser
 from repo_census.models import Repository
 from repo_census.persistence import CensusStore
 
@@ -25,3 +25,10 @@ def test_report_cli_writes_markdown(
     assert main(["report", "--database", str(database)], stdout=output) == 0
     assert output.getvalue().startswith("# Repository Census")
     assert "GitHub aggregate" in output.getvalue()
+
+
+def test_collect_cli_accepts_repository_pattern() -> None:
+    args = parser().parse_args([
+        "collect", "--owner", "denisecase", "--repo-pattern", "datafun-*"
+    ])
+    assert args.repo_pattern == "datafun-*"

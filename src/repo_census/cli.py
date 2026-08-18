@@ -20,6 +20,10 @@ def parser() -> argparse.ArgumentParser:
     collect.add_argument("--database", type=Path, default=Path("data/census.sqlite3"))
     collect.add_argument("--lookback-days", type=int, default=365)
     collect.add_argument(
+        "--repo-pattern",
+        help="collect repositories whose names match this shell-style pattern",
+    )
+    collect.add_argument(
         "--owner", action="append", choices=DEFAULT_OWNERS,
         help="collect only a configured owner; repeat for multiple owners",
     )
@@ -43,6 +47,7 @@ def main(argv: list[str] | None = None, *, stdout: TextIO = sys.stdout) -> int:
             run_id = Collector(github, store).collect(
                 lookback_days=args.lookback_days,
                 owners=tuple(args.owner) if args.owner else DEFAULT_OWNERS,
+                repo_pattern=args.repo_pattern,
             )
         print(f"collection run {run_id} completed", file=stdout)
         return 0

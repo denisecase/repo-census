@@ -1,0 +1,89 @@
+# ============================================================
+# .github/workflows/census.yml
+# ============================================================
+# Updated: 2026-08-18
+#
+# WHY:
+# Collect and preserve repository census history on a schedule.
+#
+# REQ:
+# - Run the full configured repository census.
+# - Preserve the SQLite history and generated Markdown report.
+# - Allow manual execution.
+# - Never modify monitored repositories.
+# - Use the dedicated read-only GITHUB_CENSUS_TOKEN for census access.
+
+name: Repository Census
+
+on:
+  workflow_dispatch:
+
+  schedule:
+    # Weekly on Sunday at 10:00 UTC.
+    - cron: "0 10 * * 0"
+
+permissions:
+  contents: write
+
+concurrency:
+  group: repository-census
+  cancel-in-progress: false
+
+jobs:
+  census:
+    runs-on: ubuntu-latest
+    timeout-minutes: 30
+
+    env:
+      GITHUB_TOKEN: ${{ secrets.ACTIONS_CENSUS_TOKEN }}
+
+    steps:
+      - name: A1) Check out repository
+        uses: actions/checkout@v7
+
+      - name: A2) Install uv
+        uses: astral-sh/setup-uv@v10.0.1
+        with:
+          enable-cache: true
+
+      - name: A3) Install Python
+        run: uv python install
+
+      - name: A4) Sync environment
+        run: uv sync --locked
+
+      - name: B1) Validate project
+        run: |
+          uv run ruff check .
+          uv run ty check
+          uv run pytest
+
+      - name: C1) Run repository census
+        run: uv run repo-census collect
+
+      - name: C2) Generate census report
+        run: >
+          uv run repo-census report
+          --format markdown
+          --output reports/full-census.md
+
+      - name: D1) Review generated changes
+        run: |
+          git status --short
+          git diff --stat
+          git diff --check
+
+      - name: D2) Commit census results
+        run: |
+          git config user.name "github-actions[bot]"
+          git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
+
+          git add data/census.sqlite3 reports/full-census.md
+
+          if git diff --cached --quiet; then
+            echo "No census changes to commit."
+            exit 0
+          fi
+
+          git commit -m "Update repository census"
+          git push

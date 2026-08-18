@@ -1,5 +1,15 @@
 # Repository Census
 
+[![Repo](https://img.shields.io/badge/repo-GitHub-black?logo=github)](https://github.com/denisecase/repo-census)
+[![Python 3.14](https://img.shields.io/badge/python-3.14%2B-blue?logo=python)](./pyproject.toml)
+[![uv](https://img.shields.io/badge/uv-managed-DE5FE9?logo=uv)](https://docs.astral.sh/uv/)
+[![License](https://img.shields.io/badge/license-MIT-yellow.svg)](./LICENSE)
+
+[![CI](https://github.com/denisecase/repo-census/actions/workflows/ci.yml/badge.svg?branch=main)](https://github.com/denisecase/repo-census/actions/workflows/ci.yml)
+[![Census](https://github.com/denisecase/repo-census/actions/workflows/census.yml/badge.svg?branch=main)](https://github.com/denisecase/repo-census/actions/workflows/census.yml)
+[![Links](https://github.com/denisecase/repo-census/actions/workflows/links.yml/badge.svg?branch=main)](https://github.com/denisecase/repo-census/actions/workflows/links.yml)
+[![Dependabot](https://img.shields.io/badge/Dependabot-enabled-brightgreen.svg)](https://github.com/denisecase/repo-census/security)
+
 > Collect and preserve repository activity and traffic data
 > for a fleet of GitHub repositories.
 
@@ -23,7 +33,9 @@ The process is described in:
 - [3rd Request Post-Implementation Check](docs/06-request-post-impl-check.md)
 - [3rd Response: Check Results](docs/07-response.md)
 - [4th Request: Updates](docs/08-request.md)
-  
+- [4th Response: Version 1](docs/09-response-complete.md)
+- [5th Request: Parameter match](docs/10-request-param-match.md)
+
 ## Goal
 
 Build a deterministic Python application that:
@@ -33,31 +45,39 @@ Build a deterministic Python application that:
 - preserves historical observations,
 - does not clone the repositories being measured,
 - generates a useful report,
-- and can later be scheduled with GitHub Actions.
+- runs periodically with GitHub Actions.
 
-Version 1 focuses on two questions: how actively `denisecase` maintains each repository,
-and whether GitHub traffic indicates continuing external use. It collects maintainer commits,
-views, visitors, clones, and cloners without cloning or modifying any monitored repository.
-Traffic is evidence that a repository continues to be used, but GitHub does not identify whether
+Version 1 focuses on two questions:
+how actively `denisecase` maintains each repository,
+and whether GitHub traffic indicates continuing external use.
+It collects maintainer commits,
+views, visitors, clones, and cloners
+without cloning or modifying any monitored repository.
+Traffic is evidence that a repository continues to be used,
+but GitHub does not identify whether
 that traffic came from external users or from the maintainer.
 
 ## Quick Start
 
 The application requires Python 3.14, `uv`, and a GitHub token authenticated as
-`denisecase`. The token needs repository read access; GitHub traffic endpoints generally
-require push access.
+`denisecase`.
+The token needs repository read access.
+GitHub traffic endpoints require repository Administration permission (read)
+for fine-grained tokens.
 
 ```powershell
 uv python install
 uv sync
 $env:GITHUB_TOKEN = "..."
 uv run repo-census collect
-uv run repo-census report --format markdown
+uv run repo-census report --format markdown --output reports/full-census.md
 ```
 
-The default database is `data/census.sqlite3`. Collection covers repositories visible to the
-authenticated user that are owned by `denisecase` or an organization in the explicit project
-allowlist. See [Usage](docs/usage.md) and [Architecture](docs/architecture.md).
+The default database is `data/census.sqlite3`.
+Collection covers repositories visible to the
+authenticated user that are owned by `denisecase`
+or an organization in the explicit project allowlist.
+See [Usage](docs/usage.md) and [Architecture](docs/architecture.md).
 
 ## Codex Workflow
 
@@ -68,3 +88,34 @@ allowlist. See [Usage](docs/usage.md) and [Architecture](docs/architecture.md).
 5. Copy the task from `PROMPT.md` into Codex.
 6. Review the proposed plan before implementation.
 7. Review the resulting changes before accepting them.
+
+## Development
+
+This project uses:
+
+- `uv` for Python and dependency management,
+- Ruff for linting and formatting,
+- ty for static type checking,
+- pytest for testing,
+- pre-commit for local validation,
+- GitHub Actions for continuous integration and scheduled census collection.
+
+## Update Professional Project Scaffolding
+
+```pwsh
+uvx pup-up@latest --write `
+  .annotations/annotations.md `
+  .editorconfig `
+  .gitattributes `
+  .github/.yamllint.yml `
+  .github/dependabot.yml `
+  .github/lychee.toml `
+  .github/workflows/links.yml `
+  .gitignore `
+  .markdownlint-cli2.yaml `
+  AI_USE.md `
+  LICENSE `
+  .pre-commit-config.yaml `
+  sit.ps1 `
+  shape.ps1
+```

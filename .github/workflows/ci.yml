@@ -22,7 +22,7 @@ jobs:
         run: uv python install
 
       - name: A4) Sync environment
-        run: uv sync
+        run: uv sync --locked
 
       - name: B1) Run Ruff
         run: uv run ruff check .

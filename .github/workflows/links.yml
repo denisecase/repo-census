@@ -1,0 +1,51 @@
+# ============================================================
+# .github/workflows/links.yml (ALL-REPOS)
+# ============================================================
+# Updated: 2026-08-08
+
+# WHY: Automated link checking.
+# OBS: Behavior is configured in .github/lychee.toml in this repository.
+# OBS: Runs monthly on schedule; manual trigger also available.
+
+name: Check Links
+
+on:
+  pull_request: # WHY: Validates PR links before merge.
+  schedule:
+    - cron: "0 6 1 * *" # WHY: Runs monthly on the 1st.
+  workflow_call: # WHY: Allow this workflow to be called by other workflows if needed.
+  workflow_dispatch: # WHY: Manual trigger - always available.
+
+concurrency:
+  # WHY: Prevent multiple simultaneous link checks on same ref
+  group: links-${{ github.ref || github.run_id }}
+  cancel-in-progress: true
+
+permissions:
+  contents: read # WHY: Needed to checkout code.
+
+jobs:
+  lychee:
+    name: Link checks
+    runs-on: ubuntu-latest # WHY: Stable runner for lychee-action + bash steps.
+    timeout-minutes: 10 # WHY: Prevent hanging jobs.
+
+    steps:
+
+      # === ASSEMBLE ===
+
+      - name: A1) Checkout repository code
+        uses: actions/checkout@v7
+        # WHY: Required so Lychee can inspect repository files.
+
+      # === BASIC CHECKS ===
+
+      - name: B1) Run Lychee link checker
+        uses: lycheeverse/lychee-action@v2.9.0
+        with:
+          args: >
+            --config .github/lychee.toml
+            './**/*.md'
+            './**/*.html'
+            './**/*.yml'
+            './**/*.yaml'

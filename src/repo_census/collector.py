@@ -2,6 +2,7 @@
 
 from collections.abc import Callable, Iterator, Sequence
 from datetime import UTC, datetime, timedelta
+from fnmatch import fnmatchcase
 from typing import Protocol
 
 import httpx
@@ -31,10 +32,18 @@ class Collector:
         self.store = store
         self.clock = clock
 
-    def collect(self, *, lookback_days: int = 365, owners: Sequence[str] = DEFAULT_OWNERS) -> int:
+    def collect(
+        self,
+        *,
+        lookback_days: int = 365,
+        owners: Sequence[str] = DEFAULT_OWNERS,
+        repo_pattern: str | None = None,
+    ) -> int:
         self.github.verify_identity()
         started = self.clock()
-        run_id = self.store.start_run(utc_text(started), "denisecase", lookback_days)
+        run_id = self.store.start_run(
+            utc_text(started), "denisecase", lookback_days, repo_pattern
+        )
         baseline = self.store.last_successful_started_at()
         since = started - timedelta(days=lookback_days)
         if baseline is not None:
@@ -49,6 +58,12 @@ class Collector:
                     with self.store.transaction():
                         self.store.record_owner(run_id, owner, "error", error=str(exc))
                     continue
+                if repo_pattern is not None:
+                    repositories = [
+                        repository
+                        for repository in repositories
+                        if fnmatchcase(repository.name, repo_pattern)
+                    ]
                 with self.store.transaction():
                     self.store.record_owner(run_id, owner, "successful", len(repositories))
                 for repository in repositories:

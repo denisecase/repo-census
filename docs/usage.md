@@ -16,11 +16,18 @@ unavailable; views and clones each receive a separate availability result.
 uv run repo-census collect
 uv run repo-census collect --database data/census.sqlite3 --lookback-days 365
 uv run repo-census collect --owner denisecase --owner toy-gpt
+uv run repo-census collect --owner denisecase --repo-pattern "datafun-*"
 ```
 
 Without `--owner`, collection uses the complete explicit allowlist: `denisecase` and the 21
 configured organizations. The option only selects from that allowlist; it cannot introduce an
 unconfigured organization.
+
+`--repo-pattern` applies a deterministic, case-sensitive shell-style pattern to repository names
+after each owner has been discovered. It does not match owner/full-name strings. Omitting the
+option preserves the full-census behavior and includes every visible repository for the selected
+configured owners. Scoped runs retain the pattern in collection-run metadata so reports and the
+historical database show that the inventory was intentionally filtered.
 
 The initial commit query looks back 365 days by default. Later successful collections begin at
 the previous successful collection with a one-day overlap, while still respecting the requested

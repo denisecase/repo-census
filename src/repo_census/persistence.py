@@ -16,7 +16,7 @@ CREATE TABLE IF NOT EXISTS schema_metadata (
     key TEXT PRIMARY KEY,
     value TEXT NOT NULL
 );
-INSERT OR IGNORE INTO schema_metadata(key, value) VALUES ('schema_version', '2');
+INSERT OR IGNORE INTO schema_metadata(key, value) VALUES ('schema_version', '3');
 
 CREATE TABLE IF NOT EXISTS collection_runs (
     id INTEGER PRIMARY KEY,
@@ -25,6 +25,7 @@ CREATE TABLE IF NOT EXISTS collection_runs (
     status TEXT NOT NULL CHECK(status IN ('running', 'successful', 'partial', 'failed')),
     authenticated_login TEXT NOT NULL,
     lookback_days INTEGER NOT NULL,
+    repo_pattern TEXT,
     error TEXT
 );
 CREATE TABLE IF NOT EXISTS owner_collection_results (
@@ -139,8 +140,14 @@ class CensusStore:
                     WHERE r.github_id=repository_observations.repository_id)
                 WHERE {column} IS NULL"""
             )
+        run_columns = {
+            str(row["name"])
+            for row in self.connection.execute("PRAGMA table_info(collection_runs)")
+        }
+        if "repo_pattern" not in run_columns:
+            self.connection.execute("ALTER TABLE collection_runs ADD COLUMN repo_pattern TEXT")
         self.connection.execute(
-            "INSERT INTO schema_metadata(key,value) VALUES('schema_version','2') "
+            "INSERT INTO schema_metadata(key,value) VALUES('schema_version','3') "
             "ON CONFLICT(key) DO UPDATE SET value=excluded.value"
         )
         self.connection.commit()
@@ -160,11 +167,18 @@ class CensusStore:
             self.connection.rollback()
             raise
 
-    def start_run(self, started_at: str, login: str, lookback_days: int) -> int:
+    def start_run(
+        self,
+        started_at: str,
+        login: str,
+        lookback_days: int,
+        repo_pattern: str | None = None,
+    ) -> int:
         cursor = self.connection.execute(
-            "INSERT INTO collection_runs(started_at, status, authenticated_login, lookback_days) "
-            "VALUES (?, 'running', ?, ?)",
-            (started_at, login, lookback_days),
+            "INSERT INTO collection_runs"
+            "(started_at, status, authenticated_login, lookback_days, repo_pattern) "
+            "VALUES (?, 'running', ?, ?, ?)",
+            (started_at, login, lookback_days, repo_pattern),
         )
         self.connection.commit()
         if cursor.lastrowid is None:

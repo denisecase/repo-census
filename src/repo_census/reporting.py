@@ -69,6 +69,7 @@ def build_report(store: CensusStore) -> dict[str, Any]:
             "status": run["status"],
             "authenticated_login": run["authenticated_login"],
             "lookback_days": run["lookback_days"],
+            "repo_pattern": run["repo_pattern"],
             "error": run["error"],
         },
         "owner_collection_results": owner_results,
@@ -139,6 +140,8 @@ def render_markdown(report: dict[str, Any]) -> str:
         "Traffic unique values below are GitHub's aggregate values; daily unique values are not summed.",
         "",
     ]
+    if run["repo_pattern"] is not None:
+        lines[5:5] = [f"Repository pattern: `{run['repo_pattern']}`  "]
     owner_results = report["owner_collection_results"]
     failures = [item for item in owner_results if item["status"] != "successful"]
     if failures:
